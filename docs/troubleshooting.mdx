@@ -1,0 +1,353 @@
+---
+id: troubleshooting
+title: Troubleshooting
+sidebar_label: Troubleshooting
+slug: /troubleshooting
+description: Diagnose and fix common ZecKit issues locally and in CI.
+---
+
+import Admonition from '@theme/Admonition';
+
+# Troubleshooting
+
+This guide helps you diagnose issues when working with ZecKit **locally** or in **CI**. It’s written as a small **mental model** plus a repeatable **debugging flow**, not just a list of error fixes.
+
+## Understanding ZecKit (before you debug)
+
+### What ZecKit does
+
+ZecKit helps you run a local Zcash **devnet** environment (typically via Docker), along with supporting services like nodes, a faucet, a miner, and an indexer (depending on your backend).
+
+It also provides a built-in check command:
+
+```bash
+zeckit test
+```
+
+### What ZecKit does not do
+
+ZecKit does **not**:
+
+- Run your application logic
+- Define your product’s test cases
+- Replace your CI “build + test” steps
+
+<Admonition type="important" title="Separation of responsibilities">
+ZecKit provides blockchain/devnet **infrastructure**. You provide the application and the tests that validate it.
+</Admonition>
+
+## Standard debugging flow (use this order)
+
+1. Check health:
+
+```bash
+zeckit status
+```
+
+2. Run a stricter check (when available):
+
+```bash
+zeckit test --check
+```
+
+3. Confirm Docker is actually running and containers exist:
+
+```bash
+docker ps
+```
+
+4. If state looks corrupted, inconsistent, or “stuck”, reset:
+
+```bash
+zeckit down --purge
+zeckit up --fresh
+```
+
+<Admonition type="warning" title="Purge is destructive">
+`--purge` clears local devnet state/volumes. Only use it when you intentionally want a clean slate.
+</Admonition>
+
+## Reading `zeckit status`
+
+### Example output
+
+```text
+zeckit-faucet-lwd-1       Up (healthy)
+zeckit-lightwalletd-1     Up (unhealthy)
+zeckit-zebra-miner-1      Up (healthy)
+zeckit-zebra-sync-1       Up (unhealthy)
+
+Zebra Miner - Height: 8959
+Zebra Sync  - Height: 0
+Faucet - Balance: 125.00 ZEC
+```
+
+### How to interpret common signals
+
+| Signal | What it usually means |
+| --- | --- |
+| `healthy` | Service is ready enough for its role |
+| `unhealthy` | Still initializing **or** failed / blocked on a dependency |
+| Miner height increasing | Blocks are being produced |
+| Faucet balance is positive | There are funds available for testing |
+
+<Admonition type="tip">
+“Unhealthy” often means **still starting**. Give the system time, then re-run `zeckit status` before you purge state.
+</Admonition>
+
+## Devnet fails to start
+
+### Symptoms
+
+- `zeckit up` appears to hang
+- timeout errors
+- `docker ps` shows no expected containers
+
+### Common causes
+
+- Docker isn’t running
+- machine is resource constrained
+- corrupted local state from a previous run
+
+### Fix
+
+```bash
+zeckit down --purge
+zeckit up --fresh
+```
+
+If it still fails, confirm prerequisites:
+
+- [Compatibility](/compatibility)
+
+## Docker issues
+
+### Docker isn’t running
+
+```bash
+docker ps
+```
+
+If this errors, start Docker Desktop (macOS/Windows) or your Docker daemon (Linux).
+
+### Permission denied connecting to Docker (Linux)
+
+If you see errors about permission denied talking to the Docker socket:
+
+```bash
+sudo usermod -aG docker "$USER"
+```
+
+Then **log out and back in** (or reboot). Alternatively, use a rootless Docker setup per Docker’s docs.
+
+## Port conflicts
+
+### Ports commonly involved
+
+| Area | Port | Notes |
+| --- | --- | --- |
+| Zebra RPC | `8232` | Exact usage can vary by setup |
+| HTTP services | `8080` | Often used by faucet / local HTTP endpoints |
+| Indexer / metrics | `9067` | Varies by backend |
+
+### Symptoms
+
+- “address already in use”
+- services fail to bind ports
+
+### Fix
+
+Identify what’s listening (example on macOS/Linux):
+
+```bash
+lsof -i :8080
+```
+
+Stop the conflicting process, or tear down ZecKit containers:
+
+```bash
+zeckit down
+```
+
+## Slow startup
+
+### Why it happens
+
+Blockchain devnets need time to:
+
+- start multiple containers
+- initialize/sync state
+- produce blocks and fund faucets
+
+### What to do
+
+- Wait and re-check `zeckit status`
+- If startup times out, increase the wait (if your CLI supports it), e.g.:
+
+```bash
+zeckit up --timeout 900
+```
+
+If you’re unsure which flags your version supports, run:
+
+```bash
+zeckit up --help
+```
+
+<Admonition type="tip">
+The first run after a purge is often the slowest.
+</Admonition>
+
+## Services show “unhealthy”
+
+### Example
+
+```text
+lightwalletd (unhealthy)
+zebra-sync   (unhealthy)
+```
+
+### Meaning
+
+- still initializing, **or**
+- blocked waiting on a dependency, **or**
+- failed and needs a reset
+
+### Fix
+
+1. Wait 1–2 minutes
+2. Re-check:
+
+```bash
+zeckit status
+```
+
+If it persists:
+
+```bash
+zeckit down --purge
+zeckit up --fresh
+```
+
+## Zebra sync height stays at 0
+
+This usually means the sync node hasn’t progressed yet (or the devnet is stuck).
+
+### What to try
+
+- wait for miner activity and re-check `zeckit status`
+- inspect logs for miner/sync containers (names vary by setup):
+
+```bash
+docker ps
+docker logs zeckit-zebra-miner-1
+```
+
+- if still stuck, reset:
+
+```bash
+zeckit down --purge
+zeckit up --fresh
+```
+
+## Faucet balance is 0
+
+### Common causes
+
+- blocks aren’t being produced yet
+- services aren’t fully ready
+
+### What to try
+
+```bash
+docker logs zeckit-zebra-miner-1
+zeckit status
+```
+
+If it won’t recover:
+
+```bash
+zeckit down --purge
+zeckit up --fresh
+```
+
+## Tests failing
+
+### Quick checks
+
+```bash
+zeckit status
+zeckit test --check
+```
+
+### If the devnet looks healthy but tests still fail
+
+That often points to **your application/test logic**, not ZecKit itself. Validate locally:
+
+```bash
+zeckit up
+# run your normal integration test command
+```
+
+## CI failures
+
+### Symptom: “not ready” / startup timeout
+
+In GitHub Actions, increase the action’s startup budget (example field name varies by workflow):
+
+```yaml
+startup_timeout_minutes: '25'
+```
+
+More detail:
+
+- [Maintainer Guide](/maintainer)
+
+### Symptom: devnet is ready, but CI tests fail
+
+Treat it like a normal test failure: reproduce locally with `zeckit up` and run the same test command your CI runs.
+
+## Cannot connect to the devnet from your app
+
+### Checklist
+
+```bash
+zeckit status
+docker ps
+```
+
+Then verify your app is pointing at the correct host/port for your setup (localhost vs container networking).
+
+## “Weird” inconsistent behavior / suspected corruption
+
+If things feel random/inconsistent after lots of experiments:
+
+```bash
+zeckit down --purge
+zeckit up --fresh
+```
+
+## Resource issues
+
+### Symptoms
+
+- containers exit
+- frequent OOM kills
+- extremely slow progress
+
+### Fix
+
+- increase Docker CPU/memory limits
+- close heavy apps
+- restart Docker
+
+## Related docs
+
+- [Quickstart](/quickstart)
+- [Contributor Guide](/contributor)
+- [Maintainer Guide](/maintainer)
+- CLI commands: [`zeckit up`](/cli/up), [`zeckit test`](/cli/test), [`zeckit status`](/cli/status), [`zeckit down`](/cli/down), [`zeckit init`](/cli/init)
+
+<Admonition type="success">
+If you follow the standard flow (`status` → `test --check` → `docker ps` → reset), you can resolve most ZecKit issues without guessing.
+</Admonition>

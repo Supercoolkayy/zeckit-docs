@@ -1,0 +1,178 @@
+---
+id: contributor-overview
+title: Contributor Guide
+sidebar_label: Contributor Guide
+slug: /contributor
+description: Build ZecKit locally, run your local CLI binary, and validate changes end-to-end.
+---
+
+import Admonition from '@theme/Admonition';
+
+# Contributor Guide
+
+This guide walks you through contributing to **ZecKit** — from building the CLI locally to testing your changes in a real environment.
+
+## What you’ll do
+
+By the end of this guide, you will:
+
+- Build ZecKit locally
+- Run your **local CLI version** (not the published one)
+- Test changes against a real project
+- Debug issues confidently
+
+## Clone the repository
+
+```bash
+git clone https://github.com/intelliDean/ZecKit
+cd ZecKit
+```
+
+## Build the CLI locally
+
+From the repository root:
+
+```bash
+cargo build --release
+```
+
+### Where is the CLI binary?
+
+After building, the local CLI will be available at:
+
+```bash
+./target/release/zeckit
+```
+
+<Admonition type="important" title="Use the local binary">
+You should use this local binary instead of the globally installed <code>zeckit</code> command.
+</Admonition>
+
+## Run the local CLI
+
+Instead of running:
+
+```bash
+zeckit up
+```
+
+Run your local version:
+
+```bash
+./target/release/zeckit up
+```
+
+### Optional: create a shortcut
+
+```bash
+alias zeckit-local=./target/release/zeckit
+```
+
+Now you can run:
+
+```bash
+zeckit-local up
+```
+
+## Test against a real project
+
+Clone the sample project:
+
+```bash
+git clone https://github.com/Supercoolkayy/zeckit-contributor-sample
+cd zeckit-contributor-sample
+```
+
+### Run the test script
+
+```bash
+./test-local.sh
+```
+
+### What this does
+
+The script will:
+
+- Detect your **local ZecKit build**
+- Spin up the devnet
+- Run the example app
+- Execute a full end-to-end transaction
+
+<Admonition type="tip">
+This is the fastest way to validate that your local changes actually work.
+</Admonition>
+
+## Your development workflow
+
+Here’s the typical contributor loop:
+
+```bash
+# 1. Make changes in the repo
+# (edit your Rust code)
+
+# 2. Rebuild
+cargo build --release
+
+# 3. Run locally
+./target/release/zeckit up
+
+# 4. Test changes
+./target/release/zeckit test
+```
+
+## Validate your changes
+
+Check the system status:
+
+```bash
+./target/release/zeckit status
+```
+
+Make sure:
+
+- Devnet is running
+- Faucet has balance
+- Tests are passing
+
+## Debugging
+
+### View logs (example)
+
+```bash
+docker ps
+docker logs zeckit-zebra-miner-1
+```
+
+### Reset everything
+
+```bash
+./target/release/zeckit down --purge
+```
+
+## Common pitfalls
+
+| Pitfall | Symptom | Fix |
+| --- | --- | --- |
+| Using the global CLI | Your changes “don’t work” | Use `./target/release/zeckit ...` |
+| Forgetting to rebuild | Old behavior persists | Run `cargo build --release` again |
+| Devnet state drift | Flaky tests / weird balances | Run `./target/release/zeckit down --purge` |
+
+## Advanced tip: prefer local build on PATH
+
+If you want your shell to always use your local build while in the repo:
+
+```bash
+export PATH="$(pwd)/target/release:$PATH"
+```
+
+Now:
+
+```bash
+zeckit up
+```
+
+…will use your local build.
+
+<Admonition type="success">
+You now have a complete local development workflow for contributing to ZecKit.
+</Admonition>

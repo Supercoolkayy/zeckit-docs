@@ -1,0 +1,289 @@
+---
+id: maintainer-ci
+title: Maintainer Guide (CI & testing)
+sidebar_label: Maintainer Guide
+slug: /maintainer
+description: Integrate ZecKit into CI, add your own tests, and debug failures effectively.
+---
+
+import Admonition from '@theme/Admonition';
+
+# Maintainer Guide
+
+This guide explains how to integrate **ZecKit** into a CI pipeline, where ZecKit fits in your testing story, and how to debug failures.
+
+## What ZecKit does (and does not do)
+
+ZecKit helps you run a **local Zcash devnet** environment (typically via Docker), including supporting services like a faucet, miner, and indexer (depending on your setup/backend).
+
+ZecKit **does not automatically run your application’s test suite**. You still add the steps that build your project and execute your tests.
+
+## Step 1 — Initialize CI
+
+Run:
+
+```bash
+zeckit init
+```
+
+## What this creates
+
+```text
+.github/workflows/zeckit-e2e.yml
+```
+
+<Admonition type="note" title="If the workflow already exists">
+Compare changes before overwriting so you don’t lose project-specific CI steps.
+</Admonition>
+
+## Generated workflow (example)
+
+This is a representative GitHub Actions workflow shape (your generated file may differ slightly):
+
+```yaml
+name: ZecKit E2E CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  zeckit-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Start ZecKit devnet
+        uses: intelliDean/ZecKit@main
+        with:
+          backend: 'lwd'
+          image_prefix: 'ghcr.io/intellidean/zeckit'
+          startup_timeout_minutes: '20'
+```
+
+## Understanding the ZecKit Action step
+
+```yaml
+uses: intelliDean/ZecKit@main
+```
+
+This step is responsible for bringing up the ZecKit devnet environment in CI (commonly via Docker) and waiting until it is ready enough for your downstream steps to run.
+
+## Configuration options
+
+### `backend`
+
+```yaml
+backend: 'lwd'
+```
+
+Common values:
+
+- `lwd`
+- `zaino`
+
+Many teams prefer `zaino` for faster iteration:
+
+```yaml
+backend: 'zaino'
+```
+
+### `image_prefix`
+
+```yaml
+image_prefix: 'ghcr.io/intellidean/zeckit'
+```
+
+Change this only if you are testing **custom images** or using **your own registry**.
+
+### `startup_timeout_minutes`
+
+```yaml
+startup_timeout_minutes: '20'
+```
+
+CI runners are often slower than laptops. If startup times out, increase this value:
+
+```yaml
+startup_timeout_minutes: '25'
+```
+
+<Admonition type="tip">
+CI environments are slower than local machines—give the devnet enough time to become healthy before your tests start.
+</Admonition>
+
+## Step 2 — Add your own tests
+
+ZecKit prepares the blockchain environment; **you define how your project is tested**.
+
+### Example: shell smoke test (GitHub Actions)
+
+```yaml
+- name: Run smoke test
+  run: |
+    chmod +x ./smoke_test.sh
+    ./smoke_test.sh
+```
+
+### Example: smoke test script
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Checking faucet..."
+curl -fsS http://localhost:8080/stats
+
+echo "Running app logic..."
+# Replace with your actual logic
+echo "Test complete"
+```
+
+### Example: run your project’s normal test command
+
+```yaml
+- name: Run application tests
+  run: |
+    # Node.js
+    npm test
+
+    # Python
+    # pytest
+
+    # Rust
+    # cargo test
+
+    # Custom
+    # ./run-tests.sh
+```
+
+<Admonition type="important" title="ZecKit is not your test runner">
+ZecKit does not automatically execute your application tests. It provides the devnet environment your tests depend on.
+</Admonition>
+
+## Step 3 — Testing strategies
+
+### Option A — Use ZecKit’s built-in test command
+
+```yaml
+- name: Run ZecKit test
+  run: zeckit test
+```
+
+### Option B — Run your own integration tests
+
+```yaml
+- name: Run app tests
+  run: ./smoke_test.sh
+```
+
+### Option C — Combined flow
+
+```yaml
+- name: Install dependencies
+  run: npm ci
+
+- name: Run tests
+  run: npm test
+```
+
+## Step 4 — Validate CI locally (before you push)
+
+### Option 1 — ZecKit CLI
+
+```bash
+zeckit up
+zeckit test
+```
+
+### Option 2 — Sample project
+
+Repository: [zeckit-contributor-sample](https://github.com/Supercoolkayy/zeckit-contributor-sample)
+
+```bash
+git clone https://github.com/Supercoolkayy/zeckit-contributor-sample
+cd zeckit-contributor-sample
+./test-local.sh
+```
+
+### Option 3 — Run your app against a local devnet
+
+```bash
+zeckit up
+./run-tests.sh
+```
+
+<Admonition type="important">
+Always validate locally (or in a dev container) before relying on CI to catch environment issues.
+</Admonition>
+
+## Debugging CI failures
+
+Start here if CI is red:
+
+- [Troubleshooting](/troubleshooting)
+
+### Common symptoms
+
+| Symptom | What it usually means | What to try |
+| --- | --- | --- |
+| Devnet not ready / timeouts | CI is too slow or services need more time | Increase `startup_timeout_minutes` |
+| Faucet has no balance | Mining/sync not caught up yet | Wait longer, check logs, restart devnet |
+| Services unhealthy | Still initializing or bad state | Wait, or reset (`zeckit down --purge` locally) |
+| Tests fail but devnet looks fine | Application/test issue | Re-run with stricter checks: `zeckit test --check` |
+
+### Logs and artifacts
+
+Depending on your CI setup, useful artifacts often include container logs and ZecKit run output. Start with:
+
+```bash
+docker ps
+```
+
+…and inspect logs for the relevant containers (names vary by setup).
+
+## Customizing CI
+
+### Change backend
+
+```yaml
+backend: 'zaino'
+```
+
+### Use custom images
+
+```yaml
+image_prefix: 'ghcr.io/your-org/zeckit'
+```
+
+### Add build steps
+
+```yaml
+- name: Install dependencies
+  run: npm ci
+
+- name: Build app
+  run: npm run build
+```
+
+## Best practices
+
+- Prefer `zaino` when you want faster CI iteration (if it matches your testing needs).
+- Keep smoke tests small and deterministic.
+- Test locally before pushing.
+- Increase startup timeouts when runners are noisy.
+- Reset local devnet state when debugging weird failures.
+
+## Related documentation
+
+- [Quickstart](/quickstart)
+- [Contributor Guide](/contributor)
+- CLI reference (sidebar): `cli/up`, `cli/test`, `cli/status`, `cli/down`, `cli/init`
+- [Troubleshooting](/troubleshooting)
+
+<Admonition type="success">
+You should now be able to generate a CI workflow, plug in your own tests, and debug the most common failure modes.
+</Admonition>

@@ -1,0 +1,134 @@
+---
+title: Quickstart
+description: Install ZecKit, start a local Zcash devnet, and run E2E tests.
+---
+
+## What you’ll do
+
+- Install the `zeckit` CLI
+- Start a local devnet
+- Run an end-to-end test
+
+:::tip
+**Prerequisites**: You’ll need **Rust** (Cargo) and **Docker** installed and working.
+
+Before you install, check **[Compatibility](/compatibility)** for supported platforms + install links.
+:::
+
+## Install
+
+```bash
+cargo install zeckit
+```
+
+:::note
+**Already installed?** If you installed earlier and want the newest version:
+
+```bash
+cargo install zeckit --force
+```
+:::
+
+## Start a devnet
+
+```bash
+zeckit up --backend zaino
+```
+
+### Expected output (example)
+
+`zeckit up --backend zaino` prints **Starting Devnet** progress, not the **Devnet Status** screen. Early output looks like this (Docker log lines vary; the mining address is the default unless you pass `--miner-address`):
+
+```text
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ZecKit - Starting Devnet
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Starting services: zebra-miner, zebra-sync, zaino, faucet-zaino
+
+📝 Configuring Zebra mining address...
+✓ Updated docker/configs/zebra.toml
+  Mining to: tmBsTi2xWTjUdEXnuTceL7fecEQKeWaPDJd
+
+... Docker Compose creates/starts containers ...
+
+Starting services...
+
+Waiting for Zebra Miner node to initialize...
+
+[1.1/3] Zebra Miner ready
+Waiting for Zebra Sync node to initialize and peer...
+
+[1.2/3] Zebra Sync Node ready
+[1/3] Zebra Cluster ready (100%)
+
+[2/3] Zaino ready (100%)
+[3/3] Faucet ready (100%)
+
+... wallet sync, optional shielding, background miner ...
+
+✓ Devnet is running with continuous mining
+   New blocks will be mined every 15 seconds
+   Press Ctrl+C to stop
+```
+
+:::tip
+The **`ZecKit - Devnet Status`** banner and summary lines (Zebra heights, faucet balance) come from **`zeckit status`**, not from **`zeckit up`**. Run `zeckit status` after startup to verify services; heights and balances change over time.
+:::
+
+## Run tests
+
+```bash
+zeckit test
+```
+
+### Expected output (example)
+
+Run this with the devnet already up (`zeckit up`). When everything is healthy, the smoke suite prints seven checks and ends with **7 passed, 0 failed** (no trailing error line). Details in the middle (balances, TXID snippets) vary by run:
+
+```text
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ZecKit - Running Smoke Tests
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  [0/7] Cluster synchronization... PASS
+  [1/7] Zebra RPC connectivity (Miner)... PASS
+  [2/7] Faucet health check... PASS
+  [3/7] Faucet address retrieval... PASS
+  [4/7] Wallet sync capability... PASS
+  [5/7] Wallet balance and shield...
+    Checking wallet balance via API...
+    Transparent: … ZEC
+    Orchard: … ZEC
+    …
+    PASS
+  [6/7] Shielded send (E2E)...
+    Checking faucet Orchard balance...
+    ...
+    ✓ E2E Golden Flow Complete:
+      - Faucet had shielded funds (Orchard)
+      - Sent 0.05 ZEC to recipient UA
+      - Transaction broadcast successfully
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Summary: 7 passed, 0 failed
+```
+
+:::tip
+**`[0/7]`** may show **`WARN (non-fatal) …`** if the sync node lags in regtest; the run can still count as passed for that step. **`[4/7]`** may print **`LAG (retrying in 10s)...`** a few times before **`PASS`** while the wallet/indexer catch up. On failure you’ll see **`FAIL`** lines, **`Summary: … passed, … failed`**, and **`Error: Health check failed: N test(s) failed`**.
+:::
+
+## Try the sample project
+
+```bash
+git clone https://github.com/Supercoolkayy/zeckit-contributor-sample
+cd zeckit-contributor-sample
+./test-local.sh
+```
+
+:::tip
+**Next steps**
+
+- Read the CLI docs under **CLI** in the sidebar
+- If something looks off, jump to **Troubleshooting**
+:::

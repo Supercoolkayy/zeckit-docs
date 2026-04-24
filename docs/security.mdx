@@ -1,0 +1,212 @@
+---
+id: security
+title: Security
+sidebar_label: Security
+slug: /security
+description: Security considerations for using ZecKit locally, in CI, and in open source workflows.
+---
+
+import Admonition from '@theme/Admonition';
+
+# Security
+
+This guide outlines security considerations when using and contributing to ZecKit, especially in **public repositories** and **CI** environments.
+
+## Security model overview
+
+ZecKit is intended for:
+
+- Local development
+- CI testing environments
+- Isolated blockchain simulations (not production infrastructure)
+
+### What ZecKit is designed to avoid
+
+In typical usage, ZecKit aims to keep you on a **local devnet/regtest-style** environment rather than interacting with **Zcash mainnet**.
+
+### What you must still protect
+
+Even when the blockchain environment is isolated, risks can come from:
+
+- your host machine
+- Docker configuration
+- CI logs and artifacts
+- dependencies you install or execute
+
+<Admonition type="important" title="Threat modeling matters">
+ZecKit can reduce certain classes of risk (like mainnet exposure), but it does not automatically make your laptop, CI pipeline, or codebase secure.
+</Admonition>
+
+## Docker security considerations
+
+ZecKit relies heavily on Docker for isolation and repeatability.
+
+### Exposed ports (local)
+
+ZecKit setups often expose ports similar to:
+
+| Port | Common use |
+| --- | --- |
+| `8232` | Node / RPC style access (varies by setup) |
+| `8080` | HTTP services (often faucet / local HTTP) |
+| `9067` | Indexer / metrics style endpoints (varies by setup) |
+
+#### Risk
+
+If your machine is reachable from untrusted networks, locally exposed services may be accessible to others on that network path.
+
+#### Mitigation
+
+- Prefer running on trusted machines / private networks
+- Avoid publishing these ports to the public internet
+- Use host firewalls when appropriate
+
+### Privileged execution (Linux)
+
+Docker commonly requires elevated capabilities on the host.
+
+#### Risk
+
+Host compromise impact can be higher if Docker is misconfigured, outdated, or running untrusted containers.
+
+#### Mitigation
+
+- Keep Docker updated
+- Prefer least-privilege setups where feasible for your organization
+- Treat container images as part of your supply chain (pin digests when possible)
+
+## CI security (high impact)
+
+### Public logs and artifacts
+
+CI systems may upload logs, test output, and workflow artifacts that include:
+
+- container logs
+- summarized run output
+- debugging dumps
+
+Depending on your tests, these logs might include **addresses**, **transaction metadata**, or other data you don’t want public.
+
+#### Mitigation
+
+- Avoid printing secrets or sensitive material in tests
+- Redact logs where possible
+- Treat CI logs like public data for public repositories
+
+### Secrets in CI
+
+#### Risk
+
+Misconfigured workflows can leak secrets via logs, environment dumps, or cached artifacts.
+
+#### Mitigation
+
+- Use your CI provider’s secret storage (for example, GitHub Actions secrets)
+- Never hardcode credentials
+- Avoid `echo`-ing secrets and avoid passing secrets into commands that print expanded environments
+
+## Open source contribution risks
+
+### Running untrusted code
+
+When reviewing PRs or trying forks, you may execute code you haven’t fully audited.
+
+#### Mitigation
+
+- Review changes before running
+- Avoid blindly executing scripts from unfamiliar branches
+- Prefer isolated environments for untrusted work
+
+### Dependency risks
+
+ZecKit and your project may pull in:
+
+- Rust crates
+- Docker images
+- third-party GitHub Actions
+
+#### Mitigation
+
+- Prefer trusted sources and pinned versions
+- Watch for dependency updates and security advisories
+- Verify image digests for anything security-sensitive
+
+## Blockchain-specific misunderstandings
+
+### Devnet/regtest is not mainnet
+
+#### Risk
+
+It’s easy to assume “it works in ZecKit” implies production safety.
+
+#### Reality
+
+ZecKit is for **testing and development workflows**, not a statement about mainnet-grade operational security.
+
+<Admonition type="warning" title="Not for production infrastructure">
+Do not treat ZecKit devnet configurations, keys, or assumptions as production-ready security controls.
+</Admonition>
+
+### Keys, wallets, and test data
+
+#### Risk
+
+Reusing “test” keys across environments, or copying devnet habits into production systems.
+
+#### Mitigation
+
+- Treat devnet keys as **disposable**
+- Keep production keys separate with distinct configuration
+
+### Faucet usage in local testing
+
+#### Risk
+
+Aggressive scripts can create noisy loads or unrealistic testing assumptions.
+
+#### Mitigation
+
+- Keep tests bounded and realistic
+- Avoid tight loops that hammer shared resources
+
+## Network and API safety
+
+### Localhost is not a complete security boundary
+
+Other local processes (or compromised software on the same host) may still interact with services bound to localhost.
+
+#### Mitigation
+
+- Minimize sensitive endpoints
+- Prefer additional access controls when handling sensitive data
+
+## Test environment hygiene
+
+### Mixing test and real systems
+
+#### Risk
+
+Accidental configuration drift can connect a “test” workflow to real infrastructure.
+
+#### Mitigation
+
+- Separate configs explicitly (different env vars, different RPC endpoints)
+- Code review changes that touch endpoints, keys, or network settings
+
+## Best practices (short checklist)
+
+- Prefer isolated machines or VMs for untrusted work
+- Reset local state when debugging weird behavior:
+
+```bash
+zeckit down --purge
+```
+
+- Review CI logs before making a repo public
+- Pin dependencies/images for reproducibility
+- Read [Compatibility](/compatibility) before installing (prereqs and platform constraints)
+- If something behaves oddly, start with [Troubleshooting](/troubleshooting)
+
+<Admonition type="success" title="Practical goal">
+Use ZecKit to iterate quickly—while keeping CI, logs, and dependencies treated as first-class security surfaces.
+</Admonition>
